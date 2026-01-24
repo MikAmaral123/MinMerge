@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MineMerge - Merge your Resource Packs</title>
+    <link rel="stylesheet" href="style.css">
+    <meta name="description" content="The ultimate tool to merge and organize your Minecraft resource packs.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <div class="background-glob"></div>
+    <div class="app-container">
+        <input type="file" id="fileInput" multiple accept=".zip" style="display: none;">
+        <header>
+            <h1>MineMerge</h1>
+            <p>Merge your Resource Packs into a single optimized file.</p>
+        </header>
+
+        <main>
+            <section class="layers-panel glass-panel">
+                <h2><i data-lucide="layers"></i> Layers</h2>
+                <div class="layer-list" id="layerList">
+                    <!-- Placeholder for layers -->
+                    <div class="empty-state">
+                        <p>No packs added. Drag and drop files here.</p>
+                    </div>
+                </div>
+                <div class="controls-group">
+                    <div class="input-row">
+                        <input type="text" id="packNameInput" placeholder="Pack Name (e.g., SuperPack)"
+                            value="MineMerge_Pack" class="text-input glass-input">
+                        <label for="packIconInput" class="icon-upload-label glass-input" title="Change pack icon">
+                            <input type="file" id="packIconInput" accept="image/png" style="display: none;">
+                            <span id="iconLabelText"><i data-lucide="image"
+                                    style="width: 16px; height: 16px; margin-right: 8px; display: inline-block;"></i>
+                                Icon</span>
+                        </label>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn btn-primary" id="addPackBtn"><i data-lucide="plus"></i> Add Pack</button>
+                        <button class="btn btn-secondary" id="mergeBtn"><i data-lucide="merge"></i> Merge</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="upload-tools">
+                <div class="tool-card glass-panel">
+                    <div style="text-align: left;">
+                        <h3>Hosting via MC-Packs</h3>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary);">Direct upload for server use.</p>
+                    </div>
+                    <a href="https://mc-packs.net/" target="_blank" rel="noopener noreferrer"
+                        class="btn btn-accent extern-link">
+                        Upload
+                        <i data-lucide="upload-cloud"></i>
+                    </a>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="script.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
