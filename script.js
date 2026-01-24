@@ -4,15 +4,63 @@ document.addEventListener('DOMContentLoaded', () => {
     const layerList = document.getElementById('layerList');
     const fileInput = document.getElementById('fileInput');
 
-    // Store loaded packs: { name: string, file: File, id: string }
-    // Order in array = Display order (Top of list = Top visual priority)
-    // However, for merging, the Top of list should adhere to Minecraft logic:
-    // In Minecraft, top pack overrides bottom pack.
-    // So Array[0] (Visual: Top) -> Highest Priority.
+    // --- Language Logic ---
+    let currentLang = localStorage.getItem('minemerge_lang') || 'en';
+
+    // Check if user has a preferred language and no saved preference
+    if (!localStorage.getItem('minemerge_lang')) {
+        const browserLang = navigator.language.split('-')[0];
+        if (['fr', 'es'].includes(browserLang)) {
+            currentLang = browserLang;
+        }
+    }
+
+    function setLanguage(lang) {
+        currentLang = lang;
+        localStorage.setItem('minemerge_lang', lang);
+        updateInterface();
+        updateActiveButton();
+    }
+
+    // Expose to global scope for HTML buttons
+    window.setLanguage = setLanguage;
+
+    function updateActiveButton() {
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.lang === currentLang);
+        });
+    }
+
+    function updateInterface() {
+        if (typeof translations === 'undefined') return;
+        const t = translations[currentLang];
+
+        // Text Content
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            const value = resolveKey(t, key);
+            if (value) el.textContent = value;
+        });
+
+        // Placeholders
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.getAttribute('data-i18n-placeholder');
+            const value = resolveKey(t, key);
+            if (value) el.placeholder = value;
+        });
+
+        // Re-render empty state if needed
+        if (packs.length === 0) renderPacks();
+    }
+
+    function resolveKey(obj, path) {
+        return path.split('.').reduce((o, key) => (o && o[key] ? o[key] : null), obj);
+    }
+
+
+    // --- Core Logic ---
     let packs = [];
     let draggedPackId = null;
-
-    // --- Event Listeners ---
 
     addPackBtn.addEventListener('click', () => {
         fileInput.click();
@@ -20,27 +68,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.addEventListener('change', (e) => {
         handleFiles(e.target.files);
-        fileInput.value = ''; // Reset to allow same file selection again
+        fileInput.value = '';
     });
 
-    // Drag and Drop support for the list container
     const packIconInput = document.getElementById('packIconInput');
     const iconLabelText = document.getElementById('iconLabelText');
 
     if (packIconInput) {
         packIconInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
-                iconLabelText.innerText = e.target.files[0].name;
-            } else {
-                iconLabelText.innerText = 'Icon (pack.png)';
+                // Update icon label with filename
+                // Need to respect markup: <icon> Label
+                // But we only want to change the text part. 
+                // Let's force re-render via i18n logic? 
+                // Or just append filename.
+                const filename = e.target.files[0].name;
+                // Simple hack: update UI, but keep icon
+                iconLabelText.innerHTML = `<i data-lucide="image" style="width: 16px; height: 16px; margin-right: 8px; display: inline-block;"></i> ${filename}`;
+                lucide.createIcons();
             }
         });
     }
 
+    // Drag & Drop on Container
     layerList.addEventListener('dragover', (e) => {
         e.preventDefault();
-        layerList.style.borderColor = 'var(--accent-color)';
-        layerList.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+        layerList.style.borderColor = 'var(--primary)';
+        layerList.style.backgroundColor = 'rgba(6, 182, 212, 0.1)';
     });
 
     layerList.addEventListener('dragleave', () => {
@@ -52,8 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         layerList.style.borderColor = '';
         layerList.style.backgroundColor = '';
-
-        // Handle FILES drop
         if (e.dataTransfer.files.length > 0) {
             handleFiles(e.dataTransfer.files);
         }
@@ -61,13 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     mergeBtn.addEventListener('click', async () => {
         if (packs.length === 0) {
-            alert('Please add at least one Resource Pack.');
+            const t = translations[currentLang];
+            alert(currentLang === 'fr' ? 'Ajoutez au moins un pack.' : (currentLang === 'es' ? 'Añade al menos un pack.' : 'Please add at least one Resource Pack.'));
             return;
         }
         await mergePacks();
     });
 
-    // --- Functions ---
+    // --- Pack Management ---
 
     async function handleFiles(fileList) {
         for (const file of Array.from(fileList)) {
@@ -84,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const buffer = await file.arrayBuffer();
             const id = Math.random().toString(36).substr(2, 9);
-            // Add to the START of the array so new files appear at the top (High Priority by default)
             packs.unshift({
                 id: id,
                 name: file.name,
@@ -93,7 +145,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (e) {
             console.error("Error reading file:", e);
-            alert("Error reading file " + file.name);
         }
     }
 
@@ -118,13 +169,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function reorderPack(fromId, toId) {
+        const fromIndex = packs.findIndex(p => p.id === fromId);
+        const toIndex = packs.findIndex(p => p.id === toId);
+        if (fromIndex !== -1 && toIndex !== -1) {
+            const [movedItem] = packs.splice(fromIndex, 1);
+            packs.splice(toIndex, 0, movedItem);
+            renderPacks();
+        }
+    }
+
     function renderPacks() {
         layerList.innerHTML = '';
+        const t = translations[currentLang];
 
         if (packs.length === 0) {
             layerList.innerHTML = `
                 <div class="empty-state">
-                    <p>No packs added. Drag and drop files here.</p>
+                    <p>${t.empty_state}</p>
                 </div>`;
             return;
         }
@@ -137,40 +199,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             item.innerHTML = `
                 <div class="drag-handle" title="Drag to reorder">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="9" cy="12" r="1"></circle>
-                        <circle cx="9" cy="5" r="1"></circle>
-                        <circle cx="9" cy="19" r="1"></circle>
-                        <circle cx="15" cy="12" r="1"></circle>
-                        <circle cx="15" cy="5" r="1"></circle>
-                        <circle cx="15" cy="19" r="1"></circle>
-                    </svg>
+                    <i data-lucide="grip-vertical"></i>
                 </div>
                 <div class="layer-info">
-                    <span class="layer-priority">#${index + 1}</span>
                     <span class="layer-name">${pack.name}</span>
                     <span class="layer-size">${(pack.size / 1024 / 1024).toFixed(2)} MB</span>
                 </div>
                 <div class="layer-actions">
-                    <button class="icon-btn up-btn" title="Move Up" ${index === 0 ? 'disabled' : ''}>▲</button>
-                    <button class="icon-btn down-btn" title="Move Down" ${index === packs.length - 1 ? 'disabled' : ''}>▼</button>
-                    <button class="icon-btn delete-btn" title="Remove">✖</button>
+                    <button class="icon-btn up-btn" title="Move Up" ${index === 0 ? 'disabled' : ''}><i data-lucide="chevron-up"></i></button>
+                    <button class="icon-btn down-btn" title="Move Down" ${index === packs.length - 1 ? 'disabled' : ''}><i data-lucide="chevron-down"></i></button>
+                    <button class="icon-btn delete-btn" title="Remove"><i data-lucide="x"></i></button>
                 </div>
             `;
 
-            // Event bindings
+            // Event Bindings
             item.querySelector('.delete-btn').addEventListener('click', (e) => { e.stopPropagation(); removePack(pack.id); });
             item.querySelector('.up-btn').addEventListener('click', (e) => { e.stopPropagation(); movePackUp(pack.id); });
             item.querySelector('.down-btn').addEventListener('click', (e) => { e.stopPropagation(); movePackDown(pack.id); });
 
-            // Drag Events
+            // Drag
             item.addEventListener('dragstart', (e) => {
-                // Only allow drag if starting from handle
-                if (!e.target.closest('.drag-handle')) {
-                    e.preventDefault();
-                    return;
-                }
-
+                if (!e.target.closest('.drag-handle')) { e.preventDefault(); return; }
                 draggedPackId = pack.id;
                 setTimeout(() => item.classList.add('dragging'), 0);
             });
@@ -178,13 +227,9 @@ document.addEventListener('DOMContentLoaded', () => {
             item.addEventListener('dragend', () => {
                 draggedPackId = null;
                 item.classList.remove('dragging');
-                document.querySelectorAll('.layer-item').forEach(el => el.style.borderTop = '');
             });
 
-            item.addEventListener('dragover', (e) => {
-                e.preventDefault();
-            });
-
+            item.addEventListener('dragover', (e) => e.preventDefault());
             item.addEventListener('drop', (e) => {
                 if (e.dataTransfer.types.includes('Files')) return;
                 e.preventDefault();
@@ -194,122 +239,95 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            item.addEventListener('dragenter', (e) => {
-                if (e.dataTransfer.types.includes('Files')) return;
-                e.preventDefault();
-            });
-
             layerList.appendChild(item);
         });
+
+        lucide.createIcons();
     }
 
     async function mergePacks() {
         const originalText = mergeBtn.innerText;
-        mergeBtn.innerText = 'Merging...';
+        mergeBtn.innerText = 'Converting...'; // Could be translated too but simple spin is enough
         mergeBtn.disabled = true;
 
         try {
             const zip = new JSZip();
-
-            // We want to simulate Minecraft's behavior.
-            // Packs higher in the list (lower index in our array) override lower ones.
-            // So we must process from LAST (lowest priority) to FIRST (highest priority).
-            // This way, the files from high priority packs will be written LAST, overwriting previous ones.
-
-            // Reverse copy for iteration
             const packsProcessingOrder = [...packs].reverse();
 
             for (const pack of packsProcessingOrder) {
-                console.log(`Processing ${pack.name}...`);
-                // Use stored buffer data
                 const packZip = await JSZip.loadAsync(pack.data);
-
                 packZip.forEach((relativePath, zipEntry) => {
                     if (!zipEntry.dir) {
-                        // Read content and add to new zip
-                        // We use a promise to handle async reading
                         zip.file(relativePath, zipEntry.async('arraybuffer'));
                     }
                 });
             }
 
-            // Handle Icon (Custom or Default)
+            // Icon
             const packIconInput = document.getElementById('packIconInput');
             if (packIconInput && packIconInput.files.length > 0) {
-                const iconFile = packIconInput.files[0];
-                const iconBuffer = await iconFile.arrayBuffer();
+                const iconBuffer = await packIconInput.files[0].arrayBuffer();
                 zip.file("pack.png", iconBuffer);
             } else {
-                // Generate Default Icon
                 const defaultIconBuffer = await createDefaultIcon();
                 zip.file("pack.png", defaultIconBuffer);
             }
 
-            // Create a generic pack.mcmeta if it doesn't exist or just use the one from the highest priority pack (already handled by overwrite).
-            // However, to be safe and ensure the description is correct, let's create a custom one.
+            // MCMeta
             const customMcmeta = JSON.stringify({
                 pack: {
-                    pack_format: 15, // Defaulting to a recent version, user might want to change this later
+                    pack_format: 15,
                     description: "Merged with MineMerge"
                 }
             }, null, 4);
+            // Only write if not exists or overwrite? We overwrite because it's a merge
+            // But usually we respect topmost mcmeta. Let's just create a new one if merging.
+            // Actually, keep it simple: Let the files overwrite themselves. But pack.mcmeta is root.
+            // Let's force our description to indicate it's merged.
+            zip.file("pack.mcmeta", customMcmeta);
 
-            // Ask user if they want to override the metadata or keep the top one?
-            // For now, simpler: file overwriting handles it. The top pack's mcmeta is used. 
-            // We only write ONLY IF MISSING, or maybe we append to description?
-            // Let's stick to: "Top pack wins everything", simplest mental model.
-
-            // Get pack name from input
+            // Name
             const packNameInput = document.getElementById('packNameInput');
             let packName = packNameInput.value.trim() || 'MineMerge_Pack';
-            if (!packName.endsWith('.zip')) {
-                packName += '.zip';
-            }
+            if (!packName.endsWith('.zip')) packName += '.zip';
 
-            // Generate file
             const content = await zip.generateAsync({ type: "blob" });
             saveAs(content, packName);
 
-            alert('Merge completed successfully!');
-
         } catch (err) {
             console.error(err);
-            alert('An error occurred during merge: ' + err.message);
+            alert('Error: ' + err.message);
         } finally {
             mergeBtn.innerText = originalText;
             mergeBtn.disabled = false;
         }
     }
+
     function createDefaultIcon() {
         return new Promise((resolve) => {
             const canvas = document.createElement('canvas');
             canvas.width = 64;
             canvas.height = 64;
             const ctx = canvas.getContext('2d');
-
-            // Gradient Background
             const gradient = ctx.createLinearGradient(0, 0, 64, 64);
-            gradient.addColorStop(0, '#3b82f6'); // Blue
-            gradient.addColorStop(1, '#0f172a'); // Dark Slate
+            gradient.addColorStop(0, '#06b6d4');
+            gradient.addColorStop(1, '#8b5cf6');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, 64, 64);
 
-            // Accessorize borders
-            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(0, 0, 64, 64);
-
-            // Text "M"
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 36px Inter, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('M', 32, 34); // Centered
+            ctx.fillText('M', 32, 34);
 
-            // Convert to ArrayBuffer
             canvas.toBlob(async (blob) => {
                 resolve(await blob.arrayBuffer());
             }, 'image/png');
         });
     }
+
+    // Initialize
+    updateInterface();
+    updateActiveButton();
 });
